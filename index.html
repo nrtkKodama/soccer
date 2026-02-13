@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="サッカーフォーメーション強化学習シミュレーター - Q-Learningで最適な戦術を探索">
+  <title>Soccer Tactics AI - フォーメーション強化学習</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- ===== Header ===== -->
+  <header class="header">
+    <div class="header-title">
+      <span class="icon">⚽</span>
+      <div>
+        <h1>SOCCER TACTICS AI</h1>
+        <span class="header-subtitle">強化学習による最適フォーメーション探索</span>
+      </div>
+    </div>
+    <div class="header-badge">
+      <span class="dot"></span>
+      <span>Q-Learning Engine</span>
+    </div>
+  </header>
+
+  <!-- ===== Main App ===== -->
+  <div class="app-container">
+
+    <!-- ===== Sidebar ===== -->
+    <aside class="sidebar">
+
+      <!-- Home Team Formation -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🟦</span>
+          <h2>ホームチーム</h2>
+        </div>
+
+        <div class="formation-group">
+          <div class="formation-group-label">フォーメーション</div>
+          <div class="formation-options" id="homeFormationList"></div>
+        </div>
+
+        <div class="strategy-group">
+          <div class="strategy-label">⚔️ 攻撃戦略</div>
+          <select class="strategy-select" id="homeAttackStrategy"></select>
+          <div class="strategy-desc" id="homeAttackDesc"></div>
+        </div>
+
+        <div class="strategy-group">
+          <div class="strategy-label">🛡️ 守備戦略</div>
+          <select class="strategy-select" id="homeDefenseStrategy"></select>
+          <div class="strategy-desc" id="homeDefenseDesc"></div>
+        </div>
+      </div>
+
+      <!-- Away Team (Opponent) -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🟥</span>
+          <h2>アウェイチーム（対戦相手）</h2>
+        </div>
+
+        <div class="opponent-section">
+          <div class="strategy-group">
+            <div class="strategy-label">フォーメーション</div>
+            <select class="strategy-select" id="awayFormationSelect"></select>
+          </div>
+          <div class="strategy-group">
+            <div class="strategy-label">⚔️ 攻撃戦略</div>
+            <select class="strategy-select" id="awayAttackStrategy"></select>
+          </div>
+          <div class="strategy-group">
+            <div class="strategy-label">🛡️ 守備戦略</div>
+            <select class="strategy-select" id="awayDefenseStrategy"></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- RL Parameters -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🧠</span>
+          <h2>学習パラメータ</h2>
+        </div>
+
+        <div class="param-group">
+          <div class="param-label">
+            <span>学習率 (α)</span>
+            <span class="param-value" id="lrValue">0.10</span>
+          </div>
+          <input type="range" id="learningRate" min="0.01" max="0.5" step="0.01" value="0.1">
+        </div>
+
+        <div class="param-group">
+          <div class="param-label">
+            <span>割引率 (γ)</span>
+            <span class="param-value" id="dfValue">0.95</span>
+          </div>
+          <input type="range" id="discountFactor" min="0.5" max="0.99" step="0.01" value="0.95">
+        </div>
+
+        <div class="param-group">
+          <div class="param-label">
+            <span>探索率 (ε)</span>
+            <span class="param-value" id="epValue">1.00</span>
+          </div>
+          <input type="range" id="epsilon" min="0.05" max="1.0" step="0.01" value="1.0">
+        </div>
+
+        <div class="param-group">
+          <div class="param-label">
+            <span>探索率減衰</span>
+            <span class="param-value" id="edValue">0.995</span>
+          </div>
+          <input type="range" id="epsilonDecay" min="0.9" max="0.999" step="0.001" value="0.995">
+        </div>
+
+        <div class="param-group">
+          <div class="param-label">
+            <span>エピソード数</span>
+            <span class="param-value" id="epCountValue">500</span>
+          </div>
+          <input type="range" id="episodeCount" min="50" max="2000" step="50" value="500">
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" id="btnTrain">🚀 学習開始</button>
+          <button class="btn btn-danger" id="btnReset">↺ リセット</button>
+        </div>
+
+        <div style="margin-top: 0.75rem;">
+          <div class="param-label">
+            <span>学習進捗</span>
+            <span class="param-value" id="progressLabel">0%</span>
+          </div>
+          <div class="progress-bar-container">
+            <div class="progress-bar" id="progressBar" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <div class="btn-group" style="margin-top: 0.5rem;">
+          <button class="btn btn-secondary" id="btnSingleMatch">⚡ 1試合テスト</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ===== Main Content ===== -->
+    <div class="main-content">
+
+      <!-- Field -->
+      <div class="field-container">
+        <canvas id="fieldCanvas"></canvas>
+        <div class="field-overlay">
+          <div class="team-label">
+            <span class="team-dot home"></span>
+            <span id="homeTeamLabel">4-4-2</span>
+          </div>
+          <div class="team-label">
+            <span class="team-dot away"></span>
+            <span id="awayTeamLabel">4-3-3</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats Dashboard -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">📊</span>
+          <h2>シミュレーション統計</h2>
+        </div>
+        <div class="dashboard-grid">
+          <div class="stat-card">
+            <div class="stat-value blue" id="statEpisodes">0</div>
+            <div class="stat-label">エピソード</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value green" id="statWinRate">0%</div>
+            <div class="stat-label">直近勝率</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value cyan" id="statAvgReward">0.00</div>
+            <div class="stat-label">平均報酬</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value yellow" id="statEpsilon">1.00</div>
+            <div class="stat-label">探索率 ε</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value orange" id="statQSize">0</div>
+            <div class="stat-label">Q-Table サイズ</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value red" id="statBestScore">-</div>
+            <div class="stat-label">最高スコア</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Best Strategy -->
+      <div class="best-strategy" id="bestStrategyBanner">
+        <div class="best-strategy-title">
+          🏆 最適戦術（学習結果）
+        </div>
+        <div class="best-items">
+          <div class="best-item">
+            <div class="best-item-label">フォーメーション</div>
+            <div class="best-item-value" id="bestFormation">-</div>
+          </div>
+          <div class="best-item">
+            <div class="best-item-label">攻撃戦略</div>
+            <div class="best-item-value" id="bestAttack">-</div>
+          </div>
+          <div class="best-item">
+            <div class="best-item-label">守備戦略</div>
+            <div class="best-item-value" id="bestDefense">-</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div class="charts-row">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-icon">📈</span>
+            <h2>報酬推移</h2>
+          </div>
+          <div class="chart-container">
+            <canvas id="rewardChart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-icon">📉</span>
+            <h2>勝率推移</h2>
+          </div>
+          <div class="chart-container">
+            <canvas id="winRateChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ranking -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🏅</span>
+          <h2>戦術ランキング（Q値順）</h2>
+        </div>
+        <table class="ranking-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>フォーメーション</th>
+              <th>攻撃</th>
+              <th>守備</th>
+              <th>Q値</th>
+            </tr>
+          </thead>
+          <tbody id="rankingBody">
+            <tr>
+              <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                学習を実行すると結果が表示されます
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
