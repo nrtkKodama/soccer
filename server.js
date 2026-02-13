@@ -118,6 +118,10 @@ app.post('/api/full-search', async (req, res) => {
 
     try {
         const { matchesPerPair = 1 } = req.body;
+
+        const cpuCount = os.cpus().length;
+        const workerCount = Math.min(cpuCount, 8);
+
         console.log(`[Full Search] Genetic Algorithm: ${workerCount} islands × 50 pop × 20 gen`);
 
         const workerProgress = {};
