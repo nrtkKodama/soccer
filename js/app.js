@@ -2,6 +2,7 @@
  * app.js - メインアプリケーション
  * 
  * 全モジュールの統合・UI制御・Chart.js連携
+ * 攻守別フォーメーション対応
  */
 
 import { FORMATIONS, ATTACK_STRATEGIES, DEFENSE_STRATEGIES, getPositions, getMirroredPositions, getFormationList, getAttackStrategyList, getDefenseStrategyList } from './formations.js';
@@ -10,8 +11,10 @@ import { QLearningAgent } from './rl-engine.js';
 import { FieldRenderer } from './field-renderer.js';
 
 // ===== State =====
-let homeFormation = '4-4-2';
-let awayFormation = '4-3-3';
+let homeAtkFormation = '4-3-3';
+let homeDefFormation = '4-4-2';
+let awayAtkFormation = '4-3-3';
+let awayDefFormation = '4-4-2';
 let homeAttack = 'possession';
 let homeDefense = 'zonal';
 let awayAttack = 'counter';
@@ -31,7 +34,7 @@ let winRateChart = null;
 function init() {
     canvas = document.getElementById('fieldCanvas');
     renderer = new FieldRenderer(canvas);
-    buildFormationList();
+    buildFormationSelects();
     buildStrategySelects();
     buildCharts();
     bindEvents();
@@ -39,27 +42,23 @@ function init() {
     handleResize();
 }
 
-// ===== Formation List =====
-function buildFormationList() {
-    const container = document.getElementById('homeFormationList');
+// ===== Formation Selects (攻守別) =====
+function buildFormationSelects() {
     const formations = getFormationList();
 
-    container.innerHTML = formations.map(f => `
-    <button class="formation-btn ${f.key === homeFormation ? 'active' : ''}" data-formation="${f.key}">
-      <span class="name">${f.name}</span>
-      <span class="category-tag ${f.category}">${f.category === 'offensive' ? '攻撃' : f.category === 'defensive' ? '守備' : 'バランス'
-        }</span>
-    </button>
-  `).join('');
+    const selects = [
+        { id: 'homeAtkFormation', current: homeAtkFormation },
+        { id: 'homeDefFormation', current: homeDefFormation },
+        { id: 'awayAtkFormation', current: awayAtkFormation },
+        { id: 'awayDefFormation', current: awayDefFormation },
+    ];
 
-    container.querySelectorAll('.formation-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            homeFormation = btn.dataset.formation;
-            container.querySelectorAll('.formation-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            updateField();
-            document.getElementById('homeTeamLabel').textContent = homeFormation;
-        });
+    selects.forEach(s => {
+        const el = document.getElementById(s.id);
+        if (!el) return;
+        el.innerHTML = formations.map(f =>
+            `<option value="${f.key}" ${f.key === s.current ? 'selected' : ''}>${f.name}</option>`
+        ).join('');
     });
 }
 
@@ -67,7 +66,6 @@ function buildFormationList() {
 function buildStrategySelects() {
     const attacks = getAttackStrategyList();
     const defenses = getDefenseStrategyList();
-    const formations = getFormationList();
 
     // Home Attack
     const haSelect = document.getElementById('homeAttackStrategy');
@@ -93,17 +91,6 @@ function buildStrategySelects() {
     });
     document.getElementById('homeDefenseDesc').textContent = defenses.find(d => d.key === homeDefense)?.description || '';
 
-    // Away Formation
-    const afSelect = document.getElementById('awayFormationSelect');
-    afSelect.innerHTML = formations.map(f =>
-        `<option value="${f.key}" ${f.key === awayFormation ? 'selected' : ''}>${f.name}</option>`
-    ).join('');
-    afSelect.addEventListener('change', () => {
-        awayFormation = afSelect.value;
-        updateField();
-        document.getElementById('awayTeamLabel').textContent = awayFormation;
-    });
-
     // Away Attack
     const aaSelect = document.getElementById('awayAttackStrategy');
     aaSelect.innerHTML = attacks.map(a =>
@@ -121,9 +108,13 @@ function buildStrategySelects() {
 
 // ===== Field Update =====
 function updateField() {
-    const homePos = getPositions(homeFormation);
-    const awayPos = getMirroredPositions(awayFormation);
+    // 攻撃時フォーメーションでフィールド表示
+    const homePos = getPositions(homeAtkFormation);
+    const awayPos = getMirroredPositions(awayAtkFormation);
     renderer.animateTransition(homePos, awayPos);
+
+    document.getElementById('homeTeamLabel').textContent = `攻:${homeAtkFormation} / 守:${homeDefFormation}`;
+    document.getElementById('awayTeamLabel').textContent = `攻:${awayAtkFormation} / 守:${awayDefFormation}`;
 }
 
 // ===== Chart.js =====
@@ -221,22 +212,43 @@ function bindEvents() {
         { id: 'epsilon', display: 'epValue', format: v => v.toFixed(2) },
         { id: 'epsilonDecay', display: 'edValue', format: v => v.toFixed(3) },
         { id: 'episodeCount', display: 'epCountValue', format: v => Math.round(v).toString() },
+        { id: 'matchesPerPair', display: 'mppValue', format: v => Math.round(v).toString() },
     ];
 
     sliders.forEach(s => {
         const el = document.getElementById(s.id);
+        if (!el) return;
         el.addEventListener('input', () => {
             document.getElementById(s.display).textContent = s.format(parseFloat(el.value));
         });
+    });
+
+    // Formation selects
+    document.getElementById('homeAtkFormation')?.addEventListener('change', (e) => {
+        homeAtkFormation = e.target.value;
+        updateField();
+    });
+    document.getElementById('homeDefFormation')?.addEventListener('change', (e) => {
+        homeDefFormation = e.target.value;
+        updateField();
+    });
+    document.getElementById('awayAtkFormation')?.addEventListener('change', (e) => {
+        awayAtkFormation = e.target.value;
+        updateField();
+    });
+    document.getElementById('awayDefFormation')?.addEventListener('change', (e) => {
+        awayDefFormation = e.target.value;
+        updateField();
     });
 
     // Train button
     document.getElementById('btnTrain').addEventListener('click', startTraining);
     document.getElementById('btnReset').addEventListener('click', resetTraining);
     document.getElementById('btnSingleMatch').addEventListener('click', runSingleMatch);
+    document.getElementById('btnFullSearch').addEventListener('click', startFullSearch);
 }
 
-// ===== Training =====
+// ===== Training (Q-Learning) =====
 async function startTraining() {
     if (isTraining) return;
     isTraining = true;
@@ -244,8 +256,8 @@ async function startTraining() {
     const btn = document.getElementById('btnTrain');
     btn.disabled = true;
     btn.textContent = '⏳ 学習中...';
+    document.getElementById('btnFullSearch').disabled = true;
 
-    // パラメータ更新
     agent.updateParams({
         learningRate: parseFloat(document.getElementById('learningRate').value),
         discountFactor: parseFloat(document.getElementById('discountFactor').value),
@@ -260,38 +272,151 @@ async function startTraining() {
     for (let i = 0; i < batches; i++) {
         const count = Math.min(batchSize, totalEpisodes - i * batchSize);
 
-        // 非同期で少しずつ実行（UIブロック防止）
         await new Promise(resolve => {
             setTimeout(() => {
                 agent.train(count);
-
-                // 進捗更新
                 const progress = ((i + 1) / batches) * 100;
                 document.getElementById('progressBar').style.width = `${progress}%`;
                 document.getElementById('progressLabel').textContent = `${Math.round(progress)}%`;
-
                 updateStats();
                 updateCharts();
+                resolve();
+            }, 0);
+        });
+    }
+
+    updateRanking();
+    showBestStrategy();
+    applyBestStrategyToField();
+
+    btn.disabled = false;
+    btn.textContent = '🚀 Q-Learning';
+    document.getElementById('btnFullSearch').disabled = false;
+    isTraining = false;
+}
+
+// ===== Full Search (全網羅探索) =====
+let fullSearchResults = null;
+
+async function startFullSearch() {
+    if (isTraining) return;
+    isTraining = true;
+
+    const btn = document.getElementById('btnFullSearch');
+    btn.disabled = true;
+    btn.textContent = '⏳ 全探索中...';
+    document.getElementById('btnTrain').disabled = true;
+
+    agent.reset();
+    agent.updateParams({
+        learningRate: parseFloat(document.getElementById('learningRate').value),
+    });
+
+    const matchesPerPair = parseInt(document.getElementById('matchesPerPair')?.value || '3');
+
+    // 全アクション生成（攻撃F × 守備F × 攻撃戦略 × 守備戦略 = 6×6×4×4=576 通り）
+    const allActions = agent._getActions();
+    const totalCombos = allActions.length * allActions.length;
+    const totalMatches = totalCombos * matchesPerPair;
+    document.getElementById('progressLabel').textContent = `0% (${totalMatches.toLocaleString()}試合)`;
+
+    const strategyStats = {};
+    let completedHome = 0;
+
+    for (const home of allActions) {
+        await new Promise(resolve => {
+            setTimeout(() => {
+                const homeKey = `${home.atkFormation}|${home.defFormation}|${home.attack}|${home.defense}`;
+                if (!strategyStats[homeKey]) {
+                    strategyStats[homeKey] = {
+                        action: home, key: homeKey,
+                        totalWins: 0, totalDraws: 0, totalLosses: 0,
+                        totalGoals: 0, totalConceded: 0, totalPossession: 0,
+                        totalShots: 0, totalReward: 0, matchCount: 0,
+                    };
+                }
+
+                for (const opp of allActions) {
+                    for (let m = 0; m < matchesPerPair; m++) {
+                        const result = simulateMatch(
+                            { atkFormation: home.atkFormation, defFormation: home.defFormation, atkStrategy: home.attack, defStrategy: home.defense },
+                            { atkFormation: opp.atkFormation, defFormation: opp.defFormation, atkStrategy: opp.attack, defStrategy: opp.defense }
+                        );
+                        const reward = agent._calculateReward(result);
+                        const s = strategyStats[homeKey];
+                        s.matchCount++;
+                        s.totalReward += reward;
+                        s.totalGoals += result.homeGoals;
+                        s.totalConceded += result.awayGoals;
+                        s.totalPossession += result.homePossession;
+                        s.totalShots += result.homeShots;
+                        if (result.winner === 'home') s.totalWins++;
+                        else if (result.winner === 'draw') s.totalDraws++;
+                        else s.totalLosses++;
+
+                        agent.episodeCount++;
+                    }
+                }
+
+                completedHome++;
+                const progress = (completedHome / allActions.length) * 100;
+                document.getElementById('progressBar').style.width = `${progress}%`;
+                document.getElementById('progressLabel').textContent =
+                    `${Math.round(progress)}% (${agent.episodeCount.toLocaleString()}試合完了)`;
+                updateStats();
 
                 resolve();
             }, 0);
         });
     }
 
-    // 学習完了
-    updateRanking();
+    // ランキング生成
+    fullSearchResults = Object.values(strategyStats)
+        .map(s => ({
+            ...s,
+            avgReward: s.totalReward / s.matchCount,
+            winRate: s.totalWins / s.matchCount,
+            drawRate: s.totalDraws / s.matchCount,
+            lossRate: s.totalLosses / s.matchCount,
+            avgGoals: s.totalGoals / s.matchCount,
+            avgConceded: s.totalConceded / s.matchCount,
+            avgPossession: s.totalPossession / s.matchCount,
+        }))
+        .sort((a, b) => b.avgReward - a.avgReward);
+
+    // bestResult 更新
+    if (fullSearchResults.length > 0) {
+        const best = fullSearchResults[0];
+        agent.bestResult = {
+            atkFormation: best.action.atkFormation,
+            defFormation: best.action.defFormation,
+            attack: best.action.attack,
+            defense: best.action.defense,
+            score: best.avgReward,
+            winRate: best.winRate,
+            avgGoals: best.avgGoals,
+            avgConceded: best.avgConceded,
+        };
+        agent.bestScore = best.avgReward;
+    }
+
+    updateStats();
+    updateCharts();
+    updateFullSearchRanking();
     showBestStrategy();
     applyBestStrategyToField();
 
     btn.disabled = false;
-    btn.textContent = '🚀 学習開始';
+    btn.textContent = '🔍 全網羅探索';
+    document.getElementById('btnTrain').disabled = false;
+    document.getElementById('progressLabel').textContent = '完了!';
     isTraining = false;
 }
 
 // ===== Stats Update =====
 function updateStats() {
     const stats = agent.getStats();
-    document.getElementById('statEpisodes').textContent = stats.totalEpisodes;
+    document.getElementById('statEpisodes').textContent = stats.totalEpisodes.toLocaleString();
     document.getElementById('statWinRate').textContent = `${(stats.recentWinRate * 100).toFixed(0)}%`;
     document.getElementById('statAvgReward').textContent = stats.recentAvgReward.toFixed(2);
     document.getElementById('statEpsilon').textContent = stats.epsilon.toFixed(3);
@@ -304,7 +429,6 @@ function updateStats() {
 function updateCharts() {
     const stats = agent.getStats();
 
-    // Downsample if too many points
     const maxPoints = 200;
     const rewards = stats.rewardHistory;
     const winRates = stats.winRateHistory;
@@ -341,13 +465,13 @@ function updateCharts() {
     winRateChart.update('none');
 }
 
-// ===== Ranking =====
+// ===== Ranking (Q-Learning) =====
 function updateRanking() {
     const ranking = agent.getStrategyRanking(10);
     const tbody = document.getElementById('rankingBody');
 
     if (ranking.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:2rem;">学習を実行すると結果が表示されます</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:2rem;">学習を実行すると結果が表示されます</td></tr>`;
         return;
     }
 
@@ -357,10 +481,41 @@ function updateRanking() {
         return `
       <tr>
         <td class="rank">${i + 1}</td>
-        <td class="formation-name">${r.action.formation}</td>
+        <td class="formation-name">${r.action.atkFormation}</td>
+        <td class="formation-name">${r.action.defFormation}</td>
         <td>${atk ? atk.name : r.action.attack}</td>
         <td>${def ? def.name : r.action.defense}</td>
         <td class="q-value">${r.maxQ.toFixed(3)}</td>
+        <td>-</td>
+        <td>-</td>
+      </tr>
+    `;
+    }).join('');
+}
+
+// ===== Ranking (Full Search) =====
+function updateFullSearchRanking() {
+    const tbody = document.getElementById('rankingBody');
+
+    if (!fullSearchResults || fullSearchResults.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:2rem;">全網羅探索を実行すると結果が表示されます</td></tr>`;
+        return;
+    }
+
+    const top = fullSearchResults.slice(0, 15);
+    tbody.innerHTML = top.map((r, i) => {
+        const atk = ATTACK_STRATEGIES[r.action.attack];
+        const def = DEFENSE_STRATEGIES[r.action.defense];
+        return `
+      <tr>
+        <td class="rank">${i + 1}</td>
+        <td class="formation-name">${r.action.atkFormation}</td>
+        <td class="formation-name">${r.action.defFormation}</td>
+        <td>${atk ? atk.name : r.action.attack}</td>
+        <td>${def ? def.name : r.action.defense}</td>
+        <td class="q-value">${r.avgReward.toFixed(3)}</td>
+        <td style="color:var(--accent-green)">${(r.winRate * 100).toFixed(1)}%</td>
+        <td style="color:var(--text-secondary)">${r.avgGoals.toFixed(2)} - ${r.avgConceded.toFixed(2)}</td>
       </tr>
     `;
     }).join('');
@@ -368,38 +523,59 @@ function updateRanking() {
 
 // ===== Best Strategy Banner =====
 function showBestStrategy() {
-    const best = agent.getBestStrategy();
-    if (!best.action) return;
+    const bestResult = agent.bestResult;
+    if (!bestResult) return;
 
     const banner = document.getElementById('bestStrategyBanner');
     banner.classList.add('visible');
 
-    document.getElementById('bestFormation').textContent = best.action.formation;
+    document.getElementById('bestAtkFormation').textContent = bestResult.atkFormation;
+    document.getElementById('bestDefFormation').textContent = bestResult.defFormation;
     document.getElementById('bestAttack').textContent =
-        ATTACK_STRATEGIES[best.action.attack]?.name || best.action.attack;
+        ATTACK_STRATEGIES[bestResult.attack]?.name || bestResult.attack;
     document.getElementById('bestDefense').textContent =
-        DEFENSE_STRATEGIES[best.action.defense]?.name || best.action.defense;
+        DEFENSE_STRATEGIES[bestResult.defense]?.name || bestResult.defense;
+
+    const statsEl = document.getElementById('bestExtraStats');
+    if (statsEl && bestResult.winRate !== undefined) {
+        statsEl.innerHTML = `
+            <div class="best-item">
+                <div class="best-item-label">勝率</div>
+                <div class="best-item-value" style="color:var(--accent-green)">${(bestResult.winRate * 100).toFixed(1)}%</div>
+            </div>
+            <div class="best-item">
+                <div class="best-item-label">平均得点</div>
+                <div class="best-item-value" style="color:var(--accent-cyan)">${bestResult.avgGoals?.toFixed(2) || '-'}</div>
+            </div>
+            <div class="best-item">
+                <div class="best-item-label">平均失点</div>
+                <div class="best-item-value" style="color:var(--accent-red)">${bestResult.avgConceded?.toFixed(2) || '-'}</div>
+            </div>
+        `;
+        statsEl.style.display = 'grid';
+    }
 }
 
 function applyBestStrategyToField() {
-    const best = agent.getBestStrategy();
-    if (!best.action) return;
+    const bestResult = agent.bestResult;
+    if (!bestResult) return;
 
-    homeFormation = best.action.formation;
-    document.getElementById('homeTeamLabel').textContent = homeFormation;
+    homeAtkFormation = bestResult.atkFormation;
+    homeDefFormation = bestResult.defFormation;
 
-    // Update active formation button
-    document.querySelectorAll('#homeFormationList .formation-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.formation === homeFormation);
-    });
+    // Update formation selects
+    const atkSel = document.getElementById('homeAtkFormation');
+    const defSel = document.getElementById('homeDefFormation');
+    if (atkSel) atkSel.value = homeAtkFormation;
+    if (defSel) defSel.value = homeDefFormation;
 
     // Update strategy selects
-    if (best.action.attack) {
-        homeAttack = best.action.attack;
+    if (bestResult.attack) {
+        homeAttack = bestResult.attack;
         document.getElementById('homeAttackStrategy').value = homeAttack;
     }
-    if (best.action.defense) {
-        homeDefense = best.action.defense;
+    if (bestResult.defense) {
+        homeDefense = bestResult.defense;
         document.getElementById('homeDefenseStrategy').value = homeDefense;
     }
 
@@ -409,17 +585,14 @@ function applyBestStrategyToField() {
 // ===== Single Match Test =====
 function runSingleMatch() {
     const result = simulateMatch(
-        homeFormation, awayFormation,
-        homeAttack, homeDefense,
-        awayAttack, awayDefense
+        { atkFormation: homeAtkFormation, defFormation: homeDefFormation, atkStrategy: homeAttack, defStrategy: homeDefense },
+        { atkFormation: awayAtkFormation, defFormation: awayDefFormation, atkStrategy: awayAttack, defStrategy: awayDefense }
     );
 
-    // Result animation on field
-    const homePos = getPositions(homeFormation, 'attack');
-    const awayPos = getMirroredPositions(awayFormation, 'defense');
+    const homePos = getPositions(homeAtkFormation, 'attack');
+    const awayPos = getMirroredPositions(awayAtkFormation, 'defense');
     renderer.animateTransition(homePos, awayPos, 1000);
 
-    // Show result in alert-like style
     const winnerText = result.winner === 'home' ? '🎉 ホーム勝利！' :
         result.winner === 'away' ? '😔 アウェイ勝利' : '🤝 引き分け';
 
@@ -428,12 +601,10 @@ function runSingleMatch() {
         `ポゼッション: ${(result.homePossession * 100).toFixed(0)}% - ${(result.awayPossession * 100).toFixed(0)}%\n` +
         `シュート: ${result.homeShots} - ${result.awayShots}`;
 
-    // Use a non-blocking notification
     showMatchNotification(msg, result.winner);
 }
 
 function showMatchNotification(msg, winner) {
-    // Remove existing notification
     const existing = document.querySelector('.match-notification');
     if (existing) existing.remove();
 
@@ -470,10 +641,10 @@ function showMatchNotification(msg, winner) {
 // ===== Reset =====
 function resetTraining() {
     agent.reset();
+    fullSearchResults = null;
     updateStats();
     updateRanking();
 
-    // Reset charts
     rewardChart.data.labels = [];
     rewardChart.data.datasets[0].data = [];
     rewardChart.update();
@@ -481,15 +652,12 @@ function resetTraining() {
     winRateChart.data.datasets[0].data = [];
     winRateChart.update();
 
-    // Reset progress
     document.getElementById('progressBar').style.width = '0%';
     document.getElementById('progressLabel').textContent = '0%';
 
-    // Reset epsilon slider
     document.getElementById('epsilon').value = 1.0;
     document.getElementById('epValue').textContent = '1.00';
 
-    // Hide best banner
     document.getElementById('bestStrategyBanner').classList.remove('visible');
 }
 

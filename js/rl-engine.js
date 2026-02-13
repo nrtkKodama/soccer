@@ -1,8 +1,8 @@
 /**
  * rl-engine.js - 強化学習エンジン（Q-Learning）
  * 
- * 状態: フォーメーション × 攻撃戦略 × 守備戦略
- * 行動: フォーメーション変更、攻撃戦略変更、守備戦略変更
+ * 状態: 攻撃フォーメーション × 守備フォーメーション × 攻撃戦略 × 守備戦略
+ * 行動: 上記の組み合わせを変更
  * 報酬: 勝利=+3, 引分=+1, 敗北=-1, ゴール差ボーナス, ポゼッションボーナス
  */
 
@@ -35,21 +35,23 @@ export class QLearningAgent {
     }
 
     /**
-     * 状態キー生成
+     * 状態キー生成（攻撃F|守備F|攻撃戦略|守備戦略）
      */
-    _stateKey(formation, attackStrategy, defenseStrategy) {
-        return `${formation}|${attackStrategy}|${defenseStrategy}`;
+    _stateKey(atkFormation, defFormation, atkStrategy, defStrategy) {
+        return `${atkFormation}|${defFormation}|${atkStrategy}|${defStrategy}`;
     }
 
     /**
-     * 全アクション（次の状態候補）を生成
+     * 全アクション（戦術組み合わせ）を生成
      */
     _getActions() {
         const actions = [];
-        for (const f of FORMATION_KEYS) {
-            for (const a of ATTACK_KEYS) {
-                for (const d of DEFENSE_KEYS) {
-                    actions.push({ formation: f, attack: a, defense: d });
+        for (const af of FORMATION_KEYS) {
+            for (const df of FORMATION_KEYS) {
+                for (const a of ATTACK_KEYS) {
+                    for (const d of DEFENSE_KEYS) {
+                        actions.push({ atkFormation: af, defFormation: df, attack: a, defense: d });
+                    }
                 }
             }
         }
@@ -73,23 +75,27 @@ export class QLearningAgent {
     }
 
     /**
-     * ε-贪欲法でアクション選択
+     * ε-貪欲法でアクション選択
      */
     selectAction(currentState) {
         const actions = this._getActions();
 
         if (Math.random() < this.epsilon) {
-            // 探索（ランダム）
             return actions[Math.floor(Math.random() * actions.length)];
         }
 
-        // 活用（最大Q値）
-        const stateKey = this._stateKey(currentState.formation, currentState.attack, currentState.defense);
+        const stateKey = this._stateKey(
+            currentState.atkFormation, currentState.defFormation,
+            currentState.attack, currentState.defense
+        );
         let bestAction = actions[0];
         let bestQ = -Infinity;
 
         for (const action of actions) {
-            const actionKey = this._stateKey(action.formation, action.attack, action.defense);
+            const actionKey = this._stateKey(
+                action.atkFormation, action.defFormation,
+                action.attack, action.defense
+            );
             const q = this._getQ(stateKey, actionKey);
             if (q > bestQ) {
                 bestQ = q;
@@ -105,72 +111,77 @@ export class QLearningAgent {
      */
     _calculateReward(matchResult) {
         let reward = 0;
-
-        // 勝敗報酬
         if (matchResult.winner === 'home') reward += 3;
         else if (matchResult.winner === 'draw') reward += 1;
         else reward -= 1;
 
-        // ゴール差ボーナス
         reward += (matchResult.homeGoals - matchResult.awayGoals) * 0.5;
-
-        // ポゼッションボーナス
         reward += (matchResult.homePossession - 0.5) * 2;
-
-        // シュート数ボーナス
         reward += matchResult.homeShots * 0.1;
 
         return reward;
     }
 
     /**
-     * 1エピソード実行（自チーム vs ランダム相手）
+     * アクションをsimulateMatch用のtacticsオブジェクトに変換
+     */
+    _toTactics(action) {
+        return {
+            atkFormation: action.atkFormation,
+            defFormation: action.defFormation,
+            atkStrategy: action.attack,
+            defStrategy: action.defense,
+        };
+    }
+
+    /**
+     * 1エピソード実行
      */
     runEpisode(currentState = null) {
-        // 現在の状態
         if (!currentState) {
             currentState = {
-                formation: FORMATION_KEYS[Math.floor(Math.random() * FORMATION_KEYS.length)],
+                atkFormation: FORMATION_KEYS[Math.floor(Math.random() * FORMATION_KEYS.length)],
+                defFormation: FORMATION_KEYS[Math.floor(Math.random() * FORMATION_KEYS.length)],
                 attack: ATTACK_KEYS[Math.floor(Math.random() * ATTACK_KEYS.length)],
                 defense: DEFENSE_KEYS[Math.floor(Math.random() * DEFENSE_KEYS.length)],
             };
         }
 
-        // アクション選択（次の戦術）
         const action = this.selectAction(currentState);
 
-        // 対戦相手はランダム
         const opponent = {
-            formation: FORMATION_KEYS[Math.floor(Math.random() * FORMATION_KEYS.length)],
+            atkFormation: FORMATION_KEYS[Math.floor(Math.random() * FORMATION_KEYS.length)],
+            defFormation: FORMATION_KEYS[Math.floor(Math.random() * FORMATION_KEYS.length)],
             attack: ATTACK_KEYS[Math.floor(Math.random() * ATTACK_KEYS.length)],
             defense: DEFENSE_KEYS[Math.floor(Math.random() * DEFENSE_KEYS.length)],
         };
 
-        // 試合シミュレーション
-        const result = simulateMatch(
-            action.formation, opponent.formation,
-            action.attack, action.defense,
-            opponent.attack, opponent.defense
-        );
+        const result = simulateMatch(this._toTactics(action), this._toTactics(opponent));
 
-        // 報酬計算
         const reward = this._calculateReward(result);
 
         // Q値更新
-        const currentStateKey = this._stateKey(currentState.formation, currentState.attack, currentState.defense);
-        const actionKey = this._stateKey(action.formation, action.attack, action.defense);
-        const nextActions = this._getActions();
+        const currentStateKey = this._stateKey(
+            currentState.atkFormation, currentState.defFormation,
+            currentState.attack, currentState.defense
+        );
+        const actionKey = this._stateKey(
+            action.atkFormation, action.defFormation,
+            action.attack, action.defense
+        );
 
-        // 次状態の最大Q値
+        const nextActions = this._getActions();
         let maxNextQ = -Infinity;
         for (const nextAction of nextActions) {
-            const nextActionKey = this._stateKey(nextAction.formation, nextAction.attack, nextAction.defense);
+            const nextActionKey = this._stateKey(
+                nextAction.atkFormation, nextAction.defFormation,
+                nextAction.attack, nextAction.defense
+            );
             const q = this._getQ(actionKey, nextActionKey);
             if (q > maxNextQ) maxNextQ = q;
         }
         if (maxNextQ === -Infinity) maxNextQ = 0;
 
-        // Q-Learning更新式
         const currentQ = this._getQ(currentStateKey, actionKey);
         const newQ = currentQ + this.learningRate * (reward + this.discountFactor * maxNextQ - currentQ);
         this._setQ(currentStateKey, actionKey, newQ);
@@ -179,14 +190,14 @@ export class QLearningAgent {
         this.epsilon = Math.max(this.epsilonMin, this.epsilon * this.epsilonDecay);
 
         // 最良結果を記録
-        const score = reward;
-        if (score > this.bestScore) {
-            this.bestScore = score;
+        if (reward > this.bestScore) {
+            this.bestScore = reward;
             this.bestResult = {
-                formation: action.formation,
+                atkFormation: action.atkFormation,
+                defFormation: action.defFormation,
                 attack: action.attack,
                 defense: action.defense,
-                score,
+                score: reward,
                 matchResult: result,
             };
         }
@@ -203,10 +214,7 @@ export class QLearningAgent {
         };
         this.history.push(episodeRecord);
 
-        return {
-            ...episodeRecord,
-            nextState: action,
-        };
+        return { ...episodeRecord, nextState: action };
     }
 
     /**
@@ -237,17 +245,19 @@ export class QLearningAgent {
     }
 
     /**
-     * 最適戦術を取得（Q値が最高のアクション）
+     * 最適戦術を取得
      */
     getBestStrategy() {
         const actions = this._getActions();
         let globalBestAction = null;
         let globalBestQ = -Infinity;
 
-        // 全状態からの最高Q値アクションを探す
         for (const stateKey of Object.keys(this.qTable)) {
             for (const action of actions) {
-                const actionKey = this._stateKey(action.formation, action.attack, action.defense);
+                const actionKey = this._stateKey(
+                    action.atkFormation, action.defFormation,
+                    action.attack, action.defense
+                );
                 const q = this._getQ(stateKey, actionKey);
                 if (q > globalBestQ) {
                     globalBestQ = q;
@@ -264,7 +274,7 @@ export class QLearningAgent {
     }
 
     /**
-     * 全アクションのQ値ランキング
+     * 戦術ランキング
      */
     getStrategyRanking(topN = 10) {
         const actionScores = {};
@@ -272,7 +282,10 @@ export class QLearningAgent {
 
         for (const stateKey of Object.keys(this.qTable)) {
             for (const action of actions) {
-                const actionKey = this._stateKey(action.formation, action.attack, action.defense);
+                const actionKey = this._stateKey(
+                    action.atkFormation, action.defFormation,
+                    action.attack, action.defense
+                );
                 const q = this._getQ(stateKey, actionKey);
                 if (!actionScores[actionKey] || q > actionScores[actionKey].maxQ) {
                     actionScores[actionKey] = {
