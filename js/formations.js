@@ -292,17 +292,79 @@ export const DEFENSE_STRATEGIES = {
  */
 export function getPositions(formationKey, mode = 'normal') {
   const formation = FORMATIONS[formationKey];
-  if (!formation) return null;
+  if (!formation) return [];
   return formation.positions.map(p => {
     let xOffset = 0;
-    if (mode === 'attack') xOffset = formation.attackBias;
-    if (mode === 'defense') xOffset = formation.defenseBias;
+    if (mode === 'attack') xOffset = formation.attackBias || 0;
+    if (mode === 'defense') xOffset = formation.defenseBias || 0;
     return {
       ...p,
       x: Math.max(0.02, Math.min(0.98, p.x + xOffset)),
       y: p.y,
     };
   });
+}
+
+/**
+ * 選手タイプ定義 (FW/MF/DF)
+ * 各タイプにステータス補正値 (0.8 ~ 1.2) を設定
+ * speed: スピード, power: パワー/決定力, technique: テクニック/パス, defense: 守備力
+ */
+export const PLAYER_TYPES = {
+  FW: {
+    Speed: { name: 'スピード', stats: { speed: 1.2, power: 0.9, technique: 0.9, defense: 0.7 } },
+    Power: { name: 'パワー', stats: { speed: 0.9, power: 1.2, technique: 0.9, defense: 0.7 } },
+    Technique: { name: 'テクニック', stats: { speed: 0.9, power: 0.9, technique: 1.2, defense: 0.7 } },
+  },
+  MF: {
+    Playmaker: { name: '司令塔', stats: { speed: 0.8, power: 0.8, technique: 1.3, defense: 0.9 } },
+    Box2Box: { name: 'BtoB', stats: { speed: 1.1, power: 1.0, technique: 1.0, defense: 1.1 } }, // Stamina implied by high overall
+    Attacker: { name: 'アタッカー', stats: { speed: 1.1, power: 1.1, technique: 1.0, defense: 0.7 } },
+  },
+  DF: {
+    Stopper: { name: 'ストッパー', stats: { speed: 0.8, power: 1.2, technique: 0.8, defense: 1.3 } },
+    Cover: { name: 'カバーリング', stats: { speed: 1.1, power: 0.9, technique: 1.0, defense: 1.1 } },
+    BuildUp: { name: 'ビルドアップ', stats: { speed: 0.9, power: 0.9, technique: 1.2, defense: 1.0 } },
+  }
+};
+
+/**
+ * 全通りの戦術組み合わせを生成（全網羅探索用）
+ * フォーメーション x 戦術 x 選手タイプ(FW/MF/DF)
+ */
+export function getAllActions() {
+  const actions = [];
+  const formations = getFormationList();
+  const attacks = getAttackStrategyList();
+  const defenses = getDefenseStrategyList();
+  const fwTypes = Object.keys(PLAYER_TYPES.FW);
+  const mfTypes = Object.keys(PLAYER_TYPES.MF);
+  const dfTypes = Object.keys(PLAYER_TYPES.DF);
+
+  formations.forEach(fAtk => {
+    formations.forEach(fDef => {
+      attacks.forEach(atk => {
+        defenses.forEach(def => {
+          fwTypes.forEach(fw => {
+            mfTypes.forEach(mf => {
+              dfTypes.forEach(df => {
+                actions.push({
+                  atkFormation: fAtk.key,
+                  defFormation: fDef.key,
+                  attack: atk.key,
+                  defense: def.key,
+                  fwType: fw,
+                  mfType: mf,
+                  dfType: df
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+  });
+  return actions;
 }
 
 /**

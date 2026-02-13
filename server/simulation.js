@@ -3,7 +3,7 @@
  * eFootball準拠の戦術パラメータ対応
  */
 
-const { FORMATIONS, ATTACK_STRATEGIES, DEFENSE_STRATEGIES } = require('./formations');
+const { FORMATIONS, ATTACK_STRATEGIES, DEFENSE_STRATEGIES, PLAYER_TYPES } = require('./formations');
 
 const MATCH_STEPS = 200;
 const GOAL_Y_MIN = 0.35;
@@ -15,6 +15,28 @@ function dist(a, b) {
 
 function rand() {
     return Math.random();
+}
+
+/**
+ * 選手ステータスを取得
+ */
+function getPlayerStats(role, tactics) {
+    let typeKey = 'Speed'; // Default
+    let category = 'FW';
+
+    if (['ST', 'CF', 'LW', 'RW'].includes(role)) {
+        category = 'FW';
+        typeKey = tactics.fwType || 'Speed';
+    } else if (['CM', 'CDM', 'CAM', 'LM', 'RM'].includes(role)) {
+        category = 'MF';
+        typeKey = tactics.mfType || 'Box2Box';
+    } else if (['CB', 'LB', 'RB', 'LWB', 'RWB', 'GK'].includes(role)) {
+        category = 'DF';
+        typeKey = tactics.dfType || 'BuildUp';
+    }
+
+    const typeData = PLAYER_TYPES[category] && PLAYER_TYPES[category][typeKey];
+    return typeData ? typeData.stats : { speed: 1.0, power: 1.0, technique: 1.0, defense: 1.0 };
 }
 
 function getPositions(formationKey, mode = 'normal') {
@@ -42,9 +64,11 @@ function simulateMatch(homeTactics, awayTactics) {
 
     const homePlayers = getPositions(homeTactics.atkFormation, 'normal').map((p, i) => ({
         ...p, id: i, team: 'home', x: p.x, y: p.y, stamina: 1.0,
+        stats: getPlayerStats(p.role, homeTactics)
     }));
     const awayPlayers = getMirroredPositions(awayTactics.atkFormation, 'normal').map((p, i) => ({
         ...p, id: i, team: 'away', x: p.x, y: p.y, stamina: 1.0,
+        stats: getPlayerStats(p.role, awayTactics)
     }));
 
     let ball = { x: 0.5, y: 0.5 };
@@ -73,20 +97,18 @@ function simulateMatch(homeTactics, awayTactics) {
         const homeTargets = getPositions(homeActiveF, homePhase);
         const awayTargets = getMirroredPositions(awayActiveF, awayPhase);
 
-        // 守備ラインの高さに応じてDFの位置を調整
-        const defLineAdjust = possession === 'home' ? (awayDef.lineHeight - 0.5) * 0.08 : (homeDef.lineHeight - 0.5) * 0.08;
-
+        // Movement with speed bias
         homePlayers.forEach((p, i) => {
             if (i === 0) return;
             const target = homeTargets[i];
             if (target) {
                 let tx = target.x;
-                // 守備時にDFライン高さ反映
                 if (homePhase === 'defense' && (p.role === 'CB' || p.role === 'LB' || p.role === 'RB' || p.role === 'LWB' || p.role === 'RWB')) {
                     tx -= (homeDef.lineHeight - 0.5) * 0.08;
                 }
-                p.x += (tx - p.x) * 0.15;
-                p.y += (target.y - p.y) * 0.15;
+                const moveSpeed = 0.15 * (p.stats.speed * 0.5 + 0.5);
+                p.x += (tx - p.x) * moveSpeed;
+                p.y += (target.y - p.y) * moveSpeed;
                 p.role = target.role;
             }
         });
@@ -98,8 +120,9 @@ function simulateMatch(homeTactics, awayTactics) {
                 if (awayPhase === 'defense' && (p.role === 'CB' || p.role === 'LB' || p.role === 'RB' || p.role === 'LWB' || p.role === 'RWB')) {
                     tx += (awayDef.lineHeight - 0.5) * 0.08;
                 }
-                p.x += (tx - p.x) * 0.15;
-                p.y += (target.y - p.y) * 0.15;
+                const moveSpeed = 0.15 * (p.stats.speed * 0.5 + 0.5);
+                p.x += (tx - p.x) * moveSpeed;
+                p.y += (target.y - p.y) * moveSpeed;
                 p.role = target.role;
             }
         });
@@ -112,6 +135,8 @@ function simulateMatch(homeTactics, awayTactics) {
 
         // 攻撃アクション決定（eFootball戦術パラメータ反映）
         let action = decideAction(ballCarrier, atkTeam, defTeam, atkStrategy, defStrategy, possession);
+        const nearestDef = defTeam.reduce((closest, p) =>
+            p.id === 0 ? closest : (dist(p, ballCarrier) < dist(closest, ballCarrier) ? p : closest), defTeam[1]);
 
         if (action === 'shoot') {
             if (possession === 'home') homeShots++;
@@ -119,10 +144,14 @@ function simulateMatch(homeTactics, awayTactics) {
 
             const goalX = possession === 'home' ? 1.0 : 0.0;
             const distToGoal = Math.abs(ballCarrier.x - goalX);
-            const shootPower = Math.max(0, 1 - distToGoal * 1.5);
 
-            // コンパクトネスが高いほどブロック力UP
-            const blockChance = defStrategy.blockRate * (1 - distToGoal * 0.5) * (0.7 + defStrategy.compactness * 0.3);
+            // Shoot Power: Power * Technique
+            const shooterSkill = (ballCarrier.stats.power * 0.7 + ballCarrier.stats.technique * 0.3);
+            const shootPower = Math.max(0, 1 - distToGoal * 1.5) * shooterSkill;
+
+            // Block: Defense * Power
+            const blockerSkill = (nearestDef.stats.defense * 0.6 + nearestDef.stats.power * 0.4);
+            const blockChance = defStrategy.blockRate * (1 - distToGoal * 0.5) * (0.7 + defStrategy.compactness * 0.3) * blockerSkill;
 
             if (rand() < shootPower * 0.45 && rand() > blockChance * 0.6) {
                 if (possession === 'home') homeGoals++;
@@ -135,25 +164,26 @@ function simulateMatch(homeTactics, awayTactics) {
                 }
             }
         } else if (action === 'throughBall') {
-            // スルーパス: 裏へ抜ける動き
             if (possession === 'home') homeThroughBalls++;
             else awayThroughBalls++;
 
             const target = findThroughBallTarget(ballCarrier, atkTeam, defTeam, atkStrategy, possession);
             const passDist = dist(ballCarrier, target);
-            // スルーパスは精度が低いが成功すれば大チャンス
-            const passSuccess = 0.5 + atkStrategy.passAccuracyBonus * 0.5 - passDist * 0.4;
+
+            // Through Ball: Technique vs Interception
+            const passerSkill = ballCarrier.stats.technique;
+            const passSuccess = 0.5 + atkStrategy.passAccuracyBonus * 0.5 - passDist * 0.4 + (passerSkill - 1.0) * 0.2;
 
             if (rand() < passSuccess) {
                 ball.x = target.x;
                 ball.y = target.y;
-                // 守備ラインが高いとスルーパスが通りやすい（裏のスペースが空く）
                 if (defStrategy.lineHeight > 0.6 && rand() < 0.3) {
-                    // シュートチャンス発生
                     if (possession === 'home') homeShots++;
                     else awayShots++;
-                    const goalX = possession === 'home' ? 1.0 : 0.0;
-                    if (rand() < 0.35) {
+
+                    // Finisher skill vs GK/Defender
+                    const finisherSkill = (target.stats.speed * 0.5 + target.stats.power * 0.5);
+                    if (rand() < 0.35 * finisherSkill) {
                         if (possession === 'home') homeGoals++;
                         else awayGoals++;
                         ball = { x: 0.5, y: 0.5 };
@@ -161,23 +191,30 @@ function simulateMatch(homeTactics, awayTactics) {
                     }
                 }
             } else {
-                if (rand() < defStrategy.interceptionRate * (0.8 + defStrategy.coverRange * 0.2)) {
+                const interceptorSkill = nearestDef.stats.defense * 0.5 + nearestDef.stats.speed * 0.5;
+                if (rand() < defStrategy.interceptionRate * (0.8 + defStrategy.coverRange * 0.2) * interceptorSkill) {
                     possession = possession === 'home' ? 'away' : 'home';
                 }
             }
         } else if (action === 'cross') {
-            // クロス: サイドからゴール前へ
             if (possession === 'home') homeCrosses++;
             else awayCrosses++;
 
-            const crossSuccess = 0.55 + atkStrategy.passAccuracyBonus * 0.3;
+            // Cross: Technique
+            const crossSkill = ballCarrier.stats.technique;
+            const crossSuccess = 0.55 + atkStrategy.passAccuracyBonus * 0.3 + (crossSkill - 1.0) * 0.15;
+
             if (rand() < crossSuccess) {
-                // クロスが通った → ヘディングシュートチャンス
                 if (possession === 'home') homeShots++;
                 else awayShots++;
 
-                const headerChance = 0.25 + (atkStrategy.crossFreq * 0.15);
-                const blockChance = defStrategy.blockRate * defStrategy.compactness * 0.6;
+                // Header: Power vs Defense
+                const attacker = atkTeam.find(p => p.role === 'ST' || p.role === 'CF') || atkTeam[0];
+                const headerSkill = attacker.stats.power;
+                const defenderSkill = nearestDef.stats.defense * 0.6 + nearestDef.stats.power * 0.4;
+
+                const headerChance = (0.25 + (atkStrategy.crossFreq * 0.15)) * headerSkill;
+                const blockChance = defStrategy.blockRate * defStrategy.compactness * 0.6 * defenderSkill;
 
                 if (rand() < headerChance && rand() > blockChance) {
                     if (possession === 'home') homeGoals++;
@@ -197,9 +234,11 @@ function simulateMatch(homeTactics, awayTactics) {
         } else if (action === 'pass') {
             const target = findPassTarget(ballCarrier, atkTeam, defTeam, atkStrategy, possession);
             const passDist = dist(ballCarrier, target);
-            let passSuccess = 0.7 + atkStrategy.passAccuracyBonus - passDist * 0.3;
 
-            // ビルドアップタイプの影響
+            // Pass: Technique vs Defense
+            const passSkill = ballCarrier.stats.technique;
+            let passSuccess = 0.7 + atkStrategy.passAccuracyBonus - passDist * 0.3 + (passSkill - 1.0) * 0.15;
+
             if (atkStrategy.buildUp === 'short') passSuccess += 0.05;
             if (atkStrategy.buildUp === 'long') passSuccess -= 0.05;
 
@@ -207,16 +246,14 @@ function simulateMatch(homeTactics, awayTactics) {
                 ball.x = target.x;
                 ball.y = target.y;
             } else {
-                // カバー範囲が広いほどインターセプトしやすい
-                const interceptChance = defStrategy.interceptionRate * (0.8 + defStrategy.coverRange * 0.2);
+                // Intercept: Defense
+                const interceptChance = defStrategy.interceptionRate * (0.8 + defStrategy.coverRange * 0.2) * nearestDef.stats.defense;
                 if (rand() < interceptChance) {
                     possession = possession === 'home' ? 'away' : 'home';
                 }
             }
         } else if (action === 'dribble') {
             const dirX = possession === 'home' ? 0.03 : -0.03;
-
-            // サイドアタック時はサイドにドリブル
             let dirY;
             if (atkStrategy.attackArea === 'wide') {
                 dirY = (ballCarrier.y < 0.5 ? -1 : 1) * 0.03;
@@ -224,26 +261,27 @@ function simulateMatch(homeTactics, awayTactics) {
                 dirY = (rand() - 0.5) * 0.04;
             }
 
-            ballCarrier.x = Math.max(0.02, Math.min(0.98, ballCarrier.x + dirX));
-            ballCarrier.y = Math.max(0.02, Math.min(0.98, ballCarrier.y + dirY));
+            // Speed stat affects dribble speed
+            const dribbleSpeed = 1.0 + (ballCarrier.stats.speed - 1.0) * 0.5;
+            ballCarrier.x = Math.max(0.02, Math.min(0.98, ballCarrier.x + dirX * dribbleSpeed));
+            ballCarrier.y = Math.max(0.02, Math.min(0.98, ballCarrier.y + dirY * dribbleSpeed));
             ball.x = ballCarrier.x;
             ball.y = ballCarrier.y;
 
-            const nearestDef = defTeam.reduce((closest, p) =>
-                p.id === 0 ? closest : (dist(p, ball) < dist(closest, ball) ? p : closest), defTeam[1]);
-
-            // タックル: プレス強度とカバー範囲が影響
             const tackleRange = 0.08 + defStrategy.coverRange * 0.03;
-            const tackleChance = defStrategy.tackleSuccess * (0.7 + defStrategy.pressIntensity * 0.3);
+
+            // Tackle: Defense vs Technique+Speed
+            const defenderSkill = nearestDef.stats.defense * 0.7 + nearestDef.stats.speed * 0.3;
+            const dribblerSkill = ballCarrier.stats.technique * 0.6 + ballCarrier.stats.speed * 0.4;
+            const tackleChance = defStrategy.tackleSuccess * (0.7 + defStrategy.pressIntensity * 0.3) * (defenderSkill / dribblerSkill);
 
             if (dist(nearestDef, ball) < tackleRange && rand() < tackleChance) {
                 possession = possession === 'home' ? 'away' : 'home';
             }
         }
-
-        // カウンター発動チェック: ボール奪取直後のスピード特性
-        // (ポゼッション変化時にカウンター速度が高いチームは即時攻撃可能)
     }
+    // カウンター発動チェック: ボール奪取直後のスピード特性
+    // (ポゼッション変化時にカウンター速度が高いチームは即時攻撃可能)
 
     const totalSteps = homePossessionSteps + awayPossessionSteps;
 

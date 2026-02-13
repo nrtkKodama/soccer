@@ -344,7 +344,7 @@ async function runSingleMatch() {
 function displayRanking(rankings) {
     const tbody = document.getElementById('rankingBody');
     if (!rankings || rankings.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:2rem;">結果なし</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:2rem;">結果なし</td></tr>`;
         return;
     }
     tbody.innerHTML = rankings.slice(0, 15).map((r, i) => {
@@ -357,6 +357,9 @@ function displayRanking(rankings) {
         <td class="formation-name">${r.action.defFormation}</td>
         <td>${atk ? atk.name : r.action.attack}</td>
         <td>${def ? def.name : r.action.defense}</td>
+        <td>${r.action.fwType || '-'}</td>
+        <td>${r.action.mfType || '-'}</td>
+        <td>${r.action.dfType || '-'}</td>
         <td class="q-value">${r.avgReward.toFixed(3)}</td>
         <td style="color:var(--accent-green)">${(r.winRate * 100).toFixed(1)}%</td>
         <td style="color:var(--text-secondary)">${r.avgGoals.toFixed(2)} - ${r.avgConceded.toFixed(2)}</td>
@@ -375,9 +378,16 @@ function displayBest(best) {
     document.getElementById('bestDefense').textContent =
         DEFENSE_STRATEGIES[best.defense]?.name || best.defense;
 
-    const statsEl = document.getElementById('bestExtraStats');
-    if (statsEl && best.winRate !== undefined) {
-        statsEl.innerHTML = `
+    // Additional best strategy info
+    const extraStats = document.getElementById('bestExtraStats');
+    if (extraStats) {
+        let html = '';
+        if (best.fwType) html += `<div class="best-item"><div class="best-item-label">FW型</div><div class="best-item-value">${best.fwType}</div></div>`;
+        if (best.mfType) html += `<div class="best-item"><div class="best-item-label">MF型</div><div class="best-item-value">${best.mfType}</div></div>`;
+        if (best.dfType) html += `<div class="best-item"><div class="best-item-label">DF型</div><div class="best-item-value">${best.dfType}</div></div>`;
+
+        if (best.winRate !== undefined) {
+            html += `
             <div class="best-item">
                 <div class="best-item-label">勝率</div>
                 <div class="best-item-value" style="color:var(--accent-green)">${(best.winRate * 100).toFixed(1)}%</div>
@@ -390,7 +400,9 @@ function displayBest(best) {
                 <div class="best-item-label">平均失点</div>
                 <div class="best-item-value" style="color:var(--accent-red)">${best.avgConceded?.toFixed(2) || '-'}</div>
             </div>`;
-        statsEl.style.display = 'grid';
+        }
+        extraStats.innerHTML = html;
+        extraStats.style.display = 'grid';
     }
 }
 

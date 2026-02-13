@@ -133,13 +133,54 @@ const FORMATION_KEYS = Object.keys(FORMATIONS);
 const ATTACK_KEYS = Object.keys(ATTACK_STRATEGIES);
 const DEFENSE_KEYS = Object.keys(DEFENSE_STRATEGIES);
 
+/**
+ * 選手タイプ定義 (FW/MF/DF)
+ * 各タイプにステータス補正値 (0.8 ~ 1.2) を設定
+ * speed: スピード, power: パワー/決定力, technique: テクニック/パス, defense: 守備力
+ */
+const PLAYER_TYPES = {
+    FW: {
+        Speed: { name: 'スピード', stats: { speed: 1.2, power: 0.9, technique: 0.9, defense: 0.7 } },
+        Power: { name: 'パワー', stats: { speed: 0.9, power: 1.2, technique: 0.9, defense: 0.7 } },
+        Technique: { name: 'テクニック', stats: { speed: 0.9, power: 0.9, technique: 1.2, defense: 0.7 } },
+    },
+    MF: {
+        Playmaker: { name: '司令塔', stats: { speed: 0.8, power: 0.8, technique: 1.3, defense: 0.9 } },
+        Box2Box: { name: 'BtoB', stats: { speed: 1.1, power: 1.0, technique: 1.0, defense: 1.1 } },
+        Attacker: { name: 'アタッカー', stats: { speed: 1.1, power: 1.1, technique: 1.0, defense: 0.7 } },
+    },
+    DF: {
+        Stopper: { name: 'ストッパー', stats: { speed: 0.8, power: 1.2, technique: 0.8, defense: 1.3 } },
+        Cover: { name: 'カバーリング', stats: { speed: 1.1, power: 0.9, technique: 1.0, defense: 1.1 } },
+        BuildUp: { name: 'ビルドアップ', stats: { speed: 0.9, power: 0.9, technique: 1.2, defense: 1.0 } },
+    }
+};
+
 function getAllActions() {
     const actions = [];
+    const fwTypes = Object.keys(PLAYER_TYPES.FW);
+    const mfTypes = Object.keys(PLAYER_TYPES.MF);
+    const dfTypes = Object.keys(PLAYER_TYPES.DF);
+
     for (const af of FORMATION_KEYS) {
         for (const df of FORMATION_KEYS) {
             for (const a of ATTACK_KEYS) {
                 for (const d of DEFENSE_KEYS) {
-                    actions.push({ atkFormation: af, defFormation: df, attack: a, defense: d });
+                    for (const fw of fwTypes) {
+                        for (const mf of mfTypes) {
+                            for (const dfType of dfTypes) {
+                                actions.push({
+                                    atkFormation: af,
+                                    defFormation: df,
+                                    attack: a,
+                                    defense: d,
+                                    fwType: fw,
+                                    mfType: mf,
+                                    dfType: dfType
+                                });
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -149,5 +190,6 @@ function getAllActions() {
 
 module.exports = {
     FORMATIONS, ATTACK_STRATEGIES, DEFENSE_STRATEGIES,
-    FORMATION_KEYS, ATTACK_KEYS, DEFENSE_KEYS, getAllActions,
+    FORMATION_KEYS, ATTACK_KEYS, DEFENSE_KEYS, getAllActions, PLAYER_TYPES,
 };
+
