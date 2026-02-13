@@ -13,9 +13,9 @@ let homeDefFormation = '4-4-2';
 let awayAtkFormation = '4-3-3';
 let awayDefFormation = '4-4-2';
 let homeAttack = 'possession';
-let homeDefense = 'zonal';
-let awayAttack = 'counter';
-let awayDefense = 'manMark';
+let homeDefense = 'forecheck';
+let awayAttack = 'shortCounter';
+let awayDefense = 'aggressive';
 let isTraining = false;
 
 // ===== Modules =====
