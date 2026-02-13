@@ -163,7 +163,7 @@ app.post('/api/full-search', async (req, res) => {
                         process.stdout.write(`\r[GA Search] ${pct}% (Gen ${msg.generation})`);
                     }
                     if (msg.type === 'done') {
-                        resolve(msg.results);
+                        resolve(msg);
                     }
                 });
 
