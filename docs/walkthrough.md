@@ -52,21 +52,25 @@ Implemented player attribute logic into the simulation engine and expanded the f
   - Dribbling: Dependent on Speed vs Defense.
   - Passing: Dependent on Technique vs Interception (Defense).
 
-#### 2. Search Space (`js/formations.js` & `server/formations.js`)
-- Expanded `getAllActions` to iterate through all combinations of player types (3x3x3 = 27 variations) for each formation/strategy pair.
-- Total search space increased to ~26,500 combinations for deeper tactical analysis.
+#### 2. Optimization Strategy (Genetic Algorithm)
+- **Algorithm**: Replaced exhaustive search with an **Island Model Genetic Algorithm**.
+  - **Population**: 50 individuals per island (worker).
+  - **Generations**: 20 generations.
+  - **Evolution**: Selection (Tournament), Crossover (Uniform), Mutation.
+- **Performance**: Reduced search time from *forever* (370M matches) to **~1-2 minutes** (Parallel execution).
 
 #### 3. UI Updates (`index.html` & `js/app.js`)
+- **Progress Bar**: Shows generational progress and "Best Score".
 - **Ranking Table**: Added columns for "FW Type", "MF Type", and "DF Type".
-- **Best Strategy Banner**: Now displays the optimal player types found by the search.
+- **Best Strategy Banner**: Now displays the optimal player types found by the GA.
 
 ### Verification Scenarios (Player Optimization)
 
-#### Scenario 1: Full Search Execution
-1. Click **"Full Search"**. (Note: Execution time will be longer due to the expanded search space).
-2. Monitor the progress bar.
-3. Upon completion, check the **"Best Strategy" banner**. It should display the recommended player types (e.g., FW: Speed, MF: Playmaker).
-4. Verify "Best Strategy" displays win rate, score, and robust stat breakdown including player types.
+#### Scenario 1: GA Optimization Execution
+1. Click **"Full Search"**.
+2. Monitor the progress bar. It should show **"Gen X/20"** and **"Best Score"**.
+3. Upon completion (~1 min), check the **"Best Strategy" banner**. It should display the evolved player types.
+4. Verify the score and win rate are high (reflecting optimization).
 
 #### Scenario 2: Ranking Table Details
 1. Scroll down to the **"Tactical Ranking" table**.

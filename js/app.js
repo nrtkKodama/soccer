@@ -271,8 +271,11 @@ async function startFullSearch() {
                     const data = JSON.parse(trimmed.slice(6));
                     if (data.type === 'progress') {
                         document.getElementById('progressBar').style.width = data.percent + '%';
-                        document.getElementById('progressLabel').textContent =
-                            `${data.percent}% (${data.completed}/${data.total} 戦術) ${data.elapsedSeconds}秒経過`;
+                        let label = `${data.percent}% (Gen ${Math.ceil(data.completed / 50)}/20) ${data.elapsedSeconds}s`;
+                        if (data.bestFitness !== undefined) {
+                            label += ` | Best Score: ${data.bestFitness.toFixed(3)}`;
+                        }
+                        document.getElementById('progressLabel').textContent = label;
                     } else if (data.type === 'done') {
                         finalData = data;
                     } else if (data.type === 'error') {

@@ -118,37 +118,21 @@ app.post('/api/full-search', async (req, res) => {
 
     try {
         const { matchesPerPair = 1 } = req.body;
-        const allActions = getAllActions();
+        console.log(`[Full Search] Genetic Algorithm: ${workerCount} islands × 50 pop × 20 gen`);
 
-        const cpuCount = os.cpus().length;
-        const workerCount = Math.min(cpuCount, 8);
-        const chunkSize = Math.ceil(allActions.length / workerCount);
-        const totalTactics = allActions.length;
-
-        console.log(`[Full Search] ${totalTactics} tactics × ${totalTactics} opponents × ${matchesPerPair} matches = ${(totalTactics * totalTactics * matchesPerPair).toLocaleString()} total matches`);
-        console.log(`[Full Search] Using ${workerCount} worker threads (${cpuCount} CPUs detected)`);
-
-        // 各ワーカーの進捗を追跡
         const workerProgress = {};
         const workerTotals = {};
-
         const startTime = Date.now();
         const workerPromises = [];
 
         for (let w = 0; w < workerCount; w++) {
-            const start = w * chunkSize;
-            const end = Math.min(start + chunkSize, allActions.length);
-            const chunk = allActions.slice(start, end);
-
-            if (chunk.length === 0) continue;
-
             workerProgress[w] = 0;
-            workerTotals[w] = chunk.length;
+            // GA: 50 individual * 20 generations
+            workerTotals[w] = 50 * 20;
 
             const promise = new Promise((resolve, reject) => {
-                const worker = new Worker(path.join(__dirname, 'server', 'sim-worker.js'), {
+                const worker = new Worker(path.join(__dirname, 'server', 'ga-worker.js'), {
                     workerData: {
-                        homeActions: chunk,
                         matchesPerPair,
                         workerId: w,
                     },
@@ -162,8 +146,17 @@ app.post('/api/full-search', async (req, res) => {
                         const grandTotal = Object.values(workerTotals).reduce((a, b) => a + b, 0);
                         const pct = Math.round((completedTotal / grandTotal) * 100);
                         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-                        sendSSE({ type: 'progress', percent: pct, completed: completedTotal, total: grandTotal, elapsedSeconds: parseFloat(elapsed) });
-                        process.stdout.write(`\r[Full Search] ${pct}% (${completedTotal}/${grandTotal})`);
+
+                        // 進捗と暫定ベスト情報を送信
+                        sendSSE({
+                            type: 'progress',
+                            percent: pct,
+                            completed: completedTotal,
+                            total: grandTotal,
+                            elapsedSeconds: parseFloat(elapsed),
+                            bestFitness: msg.bestFitness
+                        });
+                        process.stdout.write(`\r[GA Search] ${pct}% (Gen ${msg.generation})`);
                     }
                     if (msg.type === 'done') {
                         resolve(msg.results);
@@ -181,28 +174,35 @@ app.post('/api/full-search', async (req, res) => {
 
         const workerResults = await Promise.all(workerPromises);
 
-        // 全ワーカーの結果を統合
-        const allResults = {};
-        for (const results of workerResults) {
-            Object.assign(allResults, results);
+        // 全ワーカーの結果を統合 (Islands Best)
+        const allIndividuals = [];
+        for (const res of workerResults) {
+            if (res.population) {
+                allIndividuals.push(...res.population);
+            }
         }
 
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-        const totalMatches = Object.values(allResults).reduce((sum, s) => sum + s.matchCount, 0);
-        console.log(`\n[Full Search] Complete: ${totalMatches.toLocaleString()} matches in ${elapsed}s`);
+        const matchesPerGen = 50 * 20 * 20; // 20000 matches per worker roughly
+        const totalMatches = matchesPerGen * workerCount; // approx
+        console.log(`\n[GA Search] Complete: Integrated ${allIndividuals.length} elite individuals`);
 
         // ランキング生成
-        const rankings = Object.values(allResults)
-            .map(s => ({
-                action: s.action,
-                avgReward: s.totalReward / s.matchCount,
-                winRate: s.totalWins / s.matchCount,
-                drawRate: s.totalDraws / s.matchCount,
-                lossRate: s.totalLosses / s.matchCount,
-                avgGoals: s.totalGoals / s.matchCount,
-                avgConceded: s.totalConceded / s.matchCount,
-                avgPossession: s.totalPossession / s.matchCount,
-                matchCount: s.matchCount,
+        const rankings = allIndividuals
+            .map(ind => ({
+                action: {
+                    atkFormation: ind.atkFormation,
+                    defFormation: ind.defFormation,
+                    attack: ind.attack,
+                    defense: ind.defense,
+                    fwType: ind.fwType,
+                    mfType: ind.mfType,
+                    dfType: ind.dfType
+                },
+                avgReward: ind.stats.avgReward,
+                winRate: ind.stats.winRate,
+                avgGoals: ind.stats.avgGoals,
+                avgConceded: ind.stats.avgConceded,
+                matchCount: ind.stats.matchCount,
             }))
             .sort((a, b) => b.avgReward - a.avgReward);
 

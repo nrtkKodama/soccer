@@ -19,6 +19,17 @@
   - 既存の `Formation x Strategy` に加え、`fwType`, `mfType`, `dfType` の組み合わせを追加。
   - 組み合わせ数: $720 \times 3 \times 3 \times 3 = 19,440$ 通り。
 
+> [!TIP]
+> **Optimization Strategy**: 全探索の代わりに**遺伝的アルゴリズム (Genetic Algorithm)** を採用し、効率的に最強戦術を探索する。
+> - **個体 (Individual)**: 1つの戦術セット（攻撃F、守備F、攻撃戦術、守備戦術、FW/MF/DFタイプ）。
+> - **集団 (Population)**: 1世代あたり **50個体**。
+> - **評価 (Fitness)**: ランダムに選出された対戦相手（20チーム）との試合を行い、平均勝ち点・得失点差から適応度を算出。
+> - **進化 (Evolution)**:
+>   - **選択 (Selection)**: 適応度の高い上位個体を残す（エリート保存）。
+>   - **交叉 (Crossover)**: 親個体の遺伝子（戦術パラメータ）を組み合わせて子を生成。
+>   - **突然変異 (Mutation)**: 一定確率でパラメータをランダムに変更し、局所解を回避。
+> - **世代数**: 20世代（計 $50 \times 20 = 1000$ 回の評価で収束を目指す）。
+
 ### 2. シミュレーションロジックの改修
 
 #### [MODIFY] [js/simulation.js] & [server/simulation.js]
