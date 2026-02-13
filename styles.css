@@ -134,8 +134,15 @@ body::before {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
 }
 
 /* ---- Layout ---- */
@@ -261,9 +268,20 @@ body::before {
   font-weight: 500;
 }
 
-.category-tag.offensive { background: rgba(248, 113, 113, 0.15); color: var(--accent-red); }
-.category-tag.balanced { background: rgba(251, 191, 36, 0.15); color: var(--accent-yellow); }
-.category-tag.defensive { background: rgba(52, 211, 153, 0.15); color: var(--accent-green); }
+.category-tag.offensive {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--accent-red);
+}
+
+.category-tag.balanced {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--accent-yellow);
+}
+
+.category-tag.defensive {
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--accent-green);
+}
 
 /* ---- Strategy Selectors ---- */
 .strategy-select {
@@ -472,8 +490,13 @@ input[type="range"]::-webkit-slider-thumb:hover {
   border-radius: 50%;
 }
 
-.team-dot.home { background: var(--home-color); }
-.team-dot.away { background: var(--away-color); }
+.team-dot.home {
+  background: var(--home-color);
+}
+
+.team-dot.away {
+  background: var(--away-color);
+}
 
 /* ---- Dashboard ---- */
 .dashboard-grid {
@@ -504,12 +527,29 @@ input[type="range"]::-webkit-slider-thumb:hover {
   margin-bottom: 0.25rem;
 }
 
-.stat-value.blue { color: var(--accent-blue-light); }
-.stat-value.cyan { color: var(--accent-cyan); }
-.stat-value.green { color: var(--accent-green); }
-.stat-value.yellow { color: var(--accent-yellow); }
-.stat-value.red { color: var(--accent-red); }
-.stat-value.orange { color: var(--accent-orange); }
+.stat-value.blue {
+  color: var(--accent-blue-light);
+}
+
+.stat-value.cyan {
+  color: var(--accent-cyan);
+}
+
+.stat-value.green {
+  color: var(--accent-green);
+}
+
+.stat-value.yellow {
+  color: var(--accent-yellow);
+}
+
+.stat-value.red {
+  color: var(--accent-red);
+}
+
+.stat-value.orange {
+  color: var(--accent-orange);
+}
 
 .stat-label {
   font-size: 0.7rem;
@@ -608,8 +648,15 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 @keyframes slideIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .best-strategy-title {
@@ -679,10 +726,12 @@ input[type="range"]::-webkit-slider-thumb:hover {
   .app-container {
     grid-template-columns: 1fr;
   }
+
   .sidebar {
     grid-column: 1;
     grid-row: auto;
   }
+
   .charts-row {
     grid-template-columns: 1fr;
   }
@@ -692,16 +741,111 @@ input[type="range"]::-webkit-slider-thumb:hover {
   .header {
     padding: 0.6rem 1rem;
   }
+
   .header-title h1 {
     font-size: 1rem;
   }
+
   .app-container {
     padding: 0.75rem;
   }
-  .dashboard-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+
   .best-items {
     grid-template-columns: 1fr;
   }
+}
+
+/* ---- Position Guide ---- */
+.guide-formation-name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  margin-left: auto;
+  background: rgba(34, 211, 238, 0.1);
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(34, 211, 238, 0.2);
+}
+
+.position-guide-scroll {
+  overflow-x: auto;
+}
+
+.position-guide-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  min-width: 600px;
+  /* Ensure horizontal scroll on small screens */
+}
+
+.position-guide-table th {
+  text-align: left;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border-glass);
+  white-space: nowrap;
+}
+
+.position-guide-table td {
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  vertical-align: top;
+}
+
+.position-guide-table tr:last-child td {
+  border-bottom: none;
+}
+
+.position-guide-table .pos-name {
+  font-weight: 700;
+  color: var(--text-primary);
+  display: block;
+}
+
+.position-guide-table .pos-role {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.7rem;
+  color: var(--accent-blue-light);
+  margin-right: 0.4rem;
+}
+
+.stat-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.stat-badge {
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-glass);
+  border-radius: 4px;
+  color: var(--text-primary);
+}
+
+.playstyle-tag {
+  font-size: 0.7rem;
+  color: var(--accent-yellow);
+  font-weight: 500;
+}
+
+.guide-note {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.guide-note-highlight {
+  color: var(--accent-green);
+  font-weight: 500;
+  display: block;
+  margin-bottom: 0.2rem;
 }

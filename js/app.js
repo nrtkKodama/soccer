@@ -4,7 +4,7 @@
  * UIのみ担当。シミュレーション処理はすべてバックエンドAPIに委託。
  */
 
-import { FORMATIONS, ATTACK_STRATEGIES, DEFENSE_STRATEGIES, getPositions, getMirroredPositions, getFormationList, getAttackStrategyList, getDefenseStrategyList } from './formations.js';
+import { FORMATIONS, ATTACK_STRATEGIES, DEFENSE_STRATEGIES, getPositions, getMirroredPositions, getFormationList, getAttackStrategyList, getDefenseStrategyList, getFormationGuide } from './formations.js';
 import { FieldRenderer } from './field-renderer.js';
 
 // ===== State =====
@@ -103,6 +103,39 @@ function updateField() {
     renderer.animateTransition(homePos, awayPos);
     document.getElementById('homeTeamLabel').textContent = `攻:${homeAtkFormation} / 守:${homeDefFormation}`;
     document.getElementById('awayTeamLabel').textContent = `攻:${awayAtkFormation} / 守:${awayDefFormation}`;
+
+    updatePositionGuide();
+}
+
+// ===== Position Guide =====
+function updatePositionGuide() {
+    const guide = getFormationGuide(homeAtkFormation);
+    const tbody = document.getElementById('positionGuideBody');
+    const formationNameEl = document.getElementById('guideFormationName');
+
+    if (formationNameEl) formationNameEl.textContent = homeAtkFormation;
+    if (!tbody) return;
+
+    tbody.innerHTML = guide.map(item => {
+        const badges = item.keyStats.map(stat => `<span class="stat-badge">${stat}</span>`).join('');
+        const noteHtml = item.note ? `<span class="guide-note-highlight">💡 ${item.note}</span>` : '';
+
+        return `
+            <tr>
+                <td>${item.index + 1}</td>
+                <td>
+                    <span class="pos-role">${item.role}</span>
+                    <span class="pos-name">${item.label}</span>
+                </td>
+                <td><div class="stat-badges">${badges}</div></td>
+                <td><span class="playstyle-tag">${item.playstyle}</span></td>
+                <td>
+                    ${noteHtml}
+                    <span class="guide-note">${item.description}</span>
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
 // ===== Chart.js =====
