@@ -103,8 +103,19 @@ app.post('/api/train', (req, res) => {
     }
 });
 
-// ===== API: 全網羅探索（worker_threads 並列） =====
+// ===== API: 全網羅探索（worker_threads 並列 + SSE進捗配信） =====
 app.post('/api/full-search', async (req, res) => {
+    // SSEヘッダ設定
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+    });
+
+    const sendSSE = (data) => {
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
     try {
         const { matchesPerPair = 1 } = req.body;
         const allActions = getAllActions();
@@ -112,12 +123,16 @@ app.post('/api/full-search', async (req, res) => {
         const cpuCount = os.cpus().length;
         const workerCount = Math.min(cpuCount, 8);
         const chunkSize = Math.ceil(allActions.length / workerCount);
+        const totalTactics = allActions.length;
 
-        console.log(`[Full Search] ${allActions.length} tactics × ${allActions.length} opponents × ${matchesPerPair} matches = ${(allActions.length * allActions.length * matchesPerPair).toLocaleString()} total matches`);
+        console.log(`[Full Search] ${totalTactics} tactics × ${totalTactics} opponents × ${matchesPerPair} matches = ${(totalTactics * totalTactics * matchesPerPair).toLocaleString()} total matches`);
         console.log(`[Full Search] Using ${workerCount} worker threads (${cpuCount} CPUs detected)`);
 
-        const startTime = Date.now();
+        // 各ワーカーの進捗を追跡
+        const workerProgress = {};
+        const workerTotals = {};
 
+        const startTime = Date.now();
         const workerPromises = [];
 
         for (let w = 0; w < workerCount; w++) {
@@ -126,6 +141,9 @@ app.post('/api/full-search', async (req, res) => {
             const chunk = allActions.slice(start, end);
 
             if (chunk.length === 0) continue;
+
+            workerProgress[w] = 0;
+            workerTotals[w] = chunk.length;
 
             const promise = new Promise((resolve, reject) => {
                 const worker = new Worker(path.join(__dirname, 'server', 'sim-worker.js'), {
@@ -138,9 +156,14 @@ app.post('/api/full-search', async (req, res) => {
 
                 worker.on('message', (msg) => {
                     if (msg.type === 'progress') {
-                        // サーバーログに進捗表示
-                        const pct = ((msg.completed / msg.total) * 100).toFixed(0);
-                        process.stdout.write(`\r[Worker ${msg.workerId}] ${pct}% (${msg.completed}/${msg.total})`);
+                        workerProgress[msg.workerId] = msg.completed;
+                        // 全ワーカーの合計進捗を計算
+                        const completedTotal = Object.values(workerProgress).reduce((a, b) => a + b, 0);
+                        const grandTotal = Object.values(workerTotals).reduce((a, b) => a + b, 0);
+                        const pct = Math.round((completedTotal / grandTotal) * 100);
+                        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                        sendSSE({ type: 'progress', percent: pct, completed: completedTotal, total: grandTotal, elapsedSeconds: parseFloat(elapsed) });
+                        process.stdout.write(`\r[Full Search] ${pct}% (${completedTotal}/${grandTotal})`);
                     }
                     if (msg.type === 'done') {
                         resolve(msg.results);
@@ -185,7 +208,8 @@ app.post('/api/full-search', async (req, res) => {
 
         const best = rankings[0] || null;
 
-        res.json({
+        sendSSE({
+            type: 'done',
             rankings: rankings.slice(0, 30),
             totalMatches,
             workerCount,
@@ -203,8 +227,10 @@ app.post('/api/full-search', async (req, res) => {
         });
     } catch (err) {
         console.error('Full search error:', err);
-        res.status(500).json({ error: err.message });
+        sendSSE({ type: 'error', message: err.message });
     }
+
+    res.end();
 });
 
 function calculateReward(matchResult) {

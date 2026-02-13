@@ -199,14 +199,14 @@ async function startTraining() {
     isTraining = false;
 }
 
-// ===== Full Search (全網羅探索 via Backend) =====
+// ===== Full Search (全網羅探索 via Backend + SSE進捗) =====
 async function startFullSearch() {
     if (isTraining) return;
     isTraining = true;
     setButtonsDisabled(true);
     document.getElementById('btnFullSearch').textContent = '⏳ 全探索中...';
-    document.getElementById('progressBar').style.width = '30%';
-    document.getElementById('progressLabel').textContent = 'サーバーで全網羅探索を実行中...';
+    document.getElementById('progressBar').style.width = '0%';
+    document.getElementById('progressLabel').textContent = 'サーバーに接続中...';
 
     try {
         const matchesPerPair = parseInt(document.getElementById('matchesPerPair')?.value || '1');
@@ -215,19 +215,55 @@ async function startFullSearch() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ matchesPerPair }),
         });
-        const data = await res.json();
 
-        document.getElementById('progressBar').style.width = '100%';
-        document.getElementById('progressLabel').textContent =
-            `完了! ${data.totalMatches.toLocaleString()}試合 / ${data.workerCount}コア / ${data.elapsedSeconds}秒`;
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let finalData = null;
 
-        document.getElementById('statEpisodes').textContent = data.totalMatches.toLocaleString();
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-        displayRanking(data.rankings);
+            buffer += decoder.decode(value, { stream: true });
 
-        if (data.best) {
-            displayBest(data.best);
-            applyBestToField(data.best);
+            // SSEメッセージをパース（"data: {...}\n\n" 形式）
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop(); // 最後の未完成行をバッファに保持
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed.startsWith('data: ')) continue;
+                try {
+                    const data = JSON.parse(trimmed.slice(6));
+                    if (data.type === 'progress') {
+                        document.getElementById('progressBar').style.width = data.percent + '%';
+                        document.getElementById('progressLabel').textContent =
+                            `${data.percent}% (${data.completed}/${data.total} 戦術) ${data.elapsedSeconds}秒経過`;
+                    } else if (data.type === 'done') {
+                        finalData = data;
+                    } else if (data.type === 'error') {
+                        throw new Error(data.message);
+                    }
+                } catch (parseErr) {
+                    if (parseErr instanceof SyntaxError) continue; // malformed JSON — skip
+                    throw parseErr; // re-throw server errors
+                }
+            }
+        }
+
+        if (finalData) {
+            document.getElementById('progressBar').style.width = '100%';
+            document.getElementById('progressLabel').textContent =
+                `完了! ${finalData.totalMatches.toLocaleString()}試合 / ${finalData.workerCount}コア / ${finalData.elapsedSeconds}秒`;
+
+            document.getElementById('statEpisodes').textContent = finalData.totalMatches.toLocaleString();
+            displayRanking(finalData.rankings);
+
+            if (finalData.best) {
+                displayBest(finalData.best);
+                applyBestToField(finalData.best);
+            }
         }
     } catch (err) {
         console.error('Full search error:', err);
