@@ -188,7 +188,8 @@ app.post('/api/full-search', async (req, res) => {
 
         const matchesPerGen = 50 * 20 * 20; // 20000 matches per worker roughly
         const totalMatches = matchesPerGen * workerCount; // approx
-        console.log(`\n[GA Search] Complete: Integrated ${allIndividuals.length} elite individuals`);
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`\n[GA Search] Complete: Integrated ${allIndividuals.length} elite individuals in ${elapsed}s`);
 
         // ランキング生成
         const rankings = allIndividuals
