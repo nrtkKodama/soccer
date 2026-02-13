@@ -1,0 +1,13 @@
+{
+  "name": "soccer-tactics-ai",
+  "version": "1.0.0",
+  "description": "サッカーフォーメーション強化学習シミュレーター",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}
